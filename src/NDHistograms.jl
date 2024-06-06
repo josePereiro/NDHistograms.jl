@@ -1,5 +1,11 @@
 module NDHistograms
 
-# Write your package code here.
+import Random: default_rng
+import Random: AbstractRNG
+using Base.Threads
+
+#! include .
+include("0_base.jl")
+include("1_threaded.jl")
 
 end
