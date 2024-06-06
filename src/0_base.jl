@@ -90,11 +90,13 @@ _sqerr(ri, x) = (x - ri)^2
 _sqerr(x) = Base.Fix2(_sqerr, x)
 
 _find_nearest(x::Real, r::AbstractVector) = last(findmin(_sqerr(x), r))
+
 # ------------------------------------------------------------
 # maps from Space -> bin
 # eltype(Space) must return v's type
 descretize(::Type{T}, v::T) where {T<:Number} = T(v)
 descretize(S::AbstractRange, v) = getindex(S, _find_nearest(v, S))
+descretize(S::AbstractVector, v) = getindex(S, _find_nearest(v, S))
 descretize(F::Function, v) = F(v) # custom mapping
 descretize(::T, n::T) where T = n # identity
 
