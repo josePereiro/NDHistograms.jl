@@ -1,91 +1,44 @@
-using NDHistograms
-using Test
-
-## --.- . -. - .-.- - 
-@testset "NDHistograms.jl" begin
-        
-    ## --------------------------------------------------------
-    # _find_nearest
-    let
-        _v = 1:100
-        @test NDHistograms._find_nearest(10, _v) == 10
-        _v = [1:100;] .+ 0.1
-        @test NDHistograms._find_nearest(10, _v) == 10
-    end
-    return
-
-    ## --------------------------------------------------------
-    # Histogram (threaded)
-    let
-        Random.seed!(123)
-
-        h0 = rangehistogram(-1e2, 1e2; step = 0.1)
-
-        h_pool = [deepcopy(h0) for th in 1:nthreads()]
-
-        T = 1 # K
-        @threads :static for _ in 1:nthreads()
-            h = h_pool[threadid()]
-            for it in 1:Int(1e5)
-                p = rand()
-                count!(h, - log(p) * T)
-            end
-        end
-        count!(h0, h_pool...) # reduce
-
-        @show sum(values(h0))
-        xs = sort(collect(keys(h0)))
-        xs = xs[2:end-1] # avoid edge artifacts
-        ws = counts(h0, xs)
-        ws = ws ./ maximum(ws)
-        
-        fs = exp.(-xs/T)
-        fs = fs ./ maximum(fs)
-
-        wH = sum(ws .* log.(ws))
-        @show wH
-        fH = sum(fs .* log.(fs))
-        @show fH
-        # @show isapprox(wH, fH; rtol = 1e-2)
-        @test isapprox(wH, fH; rtol = 1e-2)
-
-        # p = plot()
-        # plot!(p, xs, ws; label = "h")
-        # plot!(p, xs, fs; label = "f")
-        # p
-    end
-
-    ## ------------------------------------------------------------
-    # Identity histogram
-    let
-        Random.seed!(123)
-        
-        # Histogram
-        h0 = identity_histogram(Vector{Int})
-
-        # count
-        n = 2
-        h_pool = [deepcopy(h0) for th in 1:nthreads()]
-        @threads :static for _ in 1:nthreads()
-            h = h_pool[threadid()]
-            for it in 1:Int(1e6)
-                comb = rand(1:5, n)
-                count!(h, comb)
-            end
-        end
-        count!(h0, h_pool...) # reduce
-
-        @show length(values(h0))
-        
-        ws = collect(values(h0))
-        ws = ws ./ maximum(ws)
-
-        # @show all(isapprox.(ws, 1.0; rtol = 5e-2))
-        @test all(isapprox.(ws, 1.0; rtol = 1e-2))
-
-        # plot(ws; label = "", 
-        #     ylim = [0, maximum(ws)]
-        # )
-    end
-
+@time begin
+    using NDHistograms
+    # using CairoMakie
+    using Distributions
+    using Base.Threads
+    using Random
+    using Test
 end
+
+# .-- .-. . .- .---. . ...- -- - --. ..- 
+@time @testset "NDHistograms.jl" begin
+    Random.seed!(124)
+
+    # random distribution
+    D = 3
+    A = rand(D, D)
+    Σ = A' * A
+    N = MultivariateNormal(zeros(D), Σ)
+    steps = rand([0.05, 0.03, 0.1], D)
+
+    ntasks = 2 * nthreads()
+    tasks = map(1:ntasks) do _
+        @spawn let
+            h = NDHistogram([
+                "dim$d" => -100.0:steps[d]:100.0 
+                for d in 1:D
+            ]...)
+            for it in 1:2e5
+                x = rand(N)
+                count!(h, Tuple(x))
+            end
+            return h
+        end
+    end
+    h0 = merge!(map(fetch, tasks)...)
+
+    H0 = entropy(N)
+    @show H0
+    H1 = entropy(h0)
+    @show H1
+    @test abs(H1 - H0) / abs(H0) < 0.05
+end
+nothing
+

@@ -67,9 +67,33 @@ export dimname
 dimname(h::NDHistogram) = [h.dim_names[i] for i in eachindex(h.supports)]
 dimname(h::NDHistogram, dim) = dimname(h)[dimindex(h, dim)]
 
+import Distributions.support
 export support
-support(h::NDHistogram) = h.supports
-support(h::NDHistogram, dim) = support(h)[dimindex(h, dim)]
+Distributions.support(h::NDHistogram) = h.supports
+Distributions.support(h::NDHistogram, dim) = support(h)[dimindex(h, dim)]
+
+# for computing the discretization step
+export delta_volume
+delta_volume(r::AbstractRange) = step(r)
+delta_volume(r) = mean(diff(r))
+
+delta_volume(h::NDHistogram) = prod(delta_volume(s) for s in support(h))
+
+## .-- .-. . .- .---. . ...- -- - --. ..- 
+# assumes homogenous support
+# TODO: implement non homeneous version
+import Distributions.entropy
+export entropy
+function Distributions.entropy(h::NDHistogram)
+    Σ_p_log_p = 0.0
+    sum_v = sum(values(h))
+    dx = delta_volume(h)
+    for v in values(h)
+        p = v / sum_v
+        Σ_p_log_p += p * log(p / dx)
+    end
+    return -Σ_p_log_p 
+end
 
 # ------------------------------------------------------------
 function _find_nearest(x::Real, x0::Real, dx::Real)

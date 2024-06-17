@@ -1,30 +1,48 @@
 @time begin
     using NDHistograms
-    using CairoMakie
+    # using CairoMakie
+    using Distributions
     using Base.Threads
+    using Random
 end
 
 ## .-- .-. . .- .---. . ...- -- - --. ..- 
 # TODO: add filtering capabilities
 @time let
-    tasks = map(1:10) do _
+    Random.seed!(124)
+
+    # random distribution
+    D = 3
+    A = rand(D, D)
+    Σ = A' * A
+    N = MultivariateNormal(zeros(D), Σ)
+    steps = rand([0.05, 0.03, 0.1], D)
+
+    ntasks = 2 * nthreads()
+    tasks = map(1:ntasks) do _
         @spawn let
-            h = NDHistogram(
-                "rand0" => -10.0:0.1:10.0,
-                "rand1" => -10.0:0.1:10.0
-            )
-            for it in 1:1e5
-                r0 = randn()
-                r1 = r0 * rand()
-                count!(h, (r0, r1))
+            h = NDHistogram([
+                "dim$d" => -100.0:steps[d]:100.0 
+                for d in 1:D
+            ]...)
+            for it in 1:2e5
+                x = rand(N)
+                count!(h, Tuple(x))
             end
             return h
         end
     end
-    global h0 = merge!(fetch.(tasks)...)
+    h0 = merge!(map(fetch, tasks)...)
+
+    H0 = entropy(N)
+    @show H0
+    H1 = entropy(h0)
+    @show H1
+    @assert abs(H1 - H0) / abs(H0) < 0.05
 end
 
-
+## .-- .-. . .- .---. . ...- -- - --. ..- 
+## .-- .-. . .- .---. . ...- -- - --. ..- 
 ## .-- .-. . .- .---. . ...- -- - --. ..- 
 let
     h1 = marginal(h0, "rand1")
