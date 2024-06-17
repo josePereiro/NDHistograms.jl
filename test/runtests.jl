@@ -25,7 +25,7 @@ end
                 "dim$d" => -100.0:steps[d]:100.0 
                 for d in 1:D
             ]...)
-            for it in 1:2e5
+            for it in 1:1e6
                 x = rand(N)
                 count!(h, Tuple(x))
             end
