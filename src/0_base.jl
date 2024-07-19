@@ -22,7 +22,7 @@ end
 # ------------------------------------------------------------
 import Base.show
 function Base.show(io::IO, h::NDHistogram{elT}) where elT
-    println(io, "NDHistogram{", elT, "}")
+    println(io, "NDHistogram{", elT, "} with ", length(h), " non zero point(s)")
     for i in eachindex(h.supports)
         println(io, repr(h.dim_names[i]), " => ", repr(h.supports[i]))
     end
@@ -33,6 +33,9 @@ import Base.haskey
 Base.haskey(h::NDHistogram, v::Tuple) = haskey(h.count_dict, v)
 import Base.getindex
 Base.getindex(h::NDHistogram, v::Tuple) = getindex(h.count_dict, v)
+import Base.get
+Base.get(dflt::Function, h::NDHistogram, v::Tuple) = get(dflt, h.count_dict, v)
+Base.get(h::NDHistogram, v::Tuple, dflt) = get(h.count_dict, v, dflt)
 import Base.keys
 Base.keys(h::NDHistogram) = keys(h.count_dict)
 Base.keys(h::NDHistogram, dims) =
@@ -49,6 +52,9 @@ function Base.similar(h0::NDHistogram, dims = Colon())
     ]...)
     return h1
 end
+
+import Base.length
+Base.length(h0::NDHistogram) = length(h0.count_dict)
 
 
 ## ------------------------------------------------------------
@@ -76,6 +82,7 @@ Distributions.support(h::NDHistogram, dim) = support(h)[dimindex(h, dim)]
 export delta_volume
 delta_volume(r::AbstractRange) = step(r)
 delta_volume(r) = mean(diff(r))
+delta_volume(r::DataType) = one(r) # TODO: test this, think about it (it is the case where the support if all the space)
 
 delta_volume(h::NDHistogram) = prod(delta_volume(s) for s in support(h))
 
@@ -86,14 +93,36 @@ import Distributions.entropy
 export entropy
 function Distributions.entropy(h::NDHistogram)
     Σ_p_log_p = 0.0
-    sum_v = sum(values(h))
+    sum_w = sum(values(h))
     dx = delta_volume(h)
-    for v in values(h)
-        p = v / sum_v
+    for w in values(h)
+        p = w / sum_w
         Σ_p_log_p += p * log(p / dx)
     end
     return -Σ_p_log_p 
 end
+
+# NOTE: assumes homogenoeus support
+export pmf
+function pmf(h::NDHistogram, v::Tuple; 
+        sum_w = sum(values(h))
+    )
+    w = get(h, v, 0)
+    return w / sum_w
+end
+
+# NOTE: assumes homogenoeus support
+import Distributions.mean
+function Distributions.mean(h::NDHistogram, dim)
+    dim = dimindex(h, dim)
+    sum_w = sum(values(h))
+    Σvp = zeros(length(dim))
+    for (v, w) in h.count_dict
+        Σvp .+= v[dim] .* (w/sum_w)
+    end
+    return Tuple(Σvp)
+end
+
 
 # ------------------------------------------------------------
 function _find_nearest(x::Real, x0::Real, dx::Real)
@@ -203,8 +232,6 @@ function Base.filter(f::Function, h0::NDHistogram)
     return h1
 end
 
-
-
 # ------------------------------------------------------------
 # Give a sample vector with similar NDHistogram
 # scale: scale back the sample vector size
@@ -235,7 +262,6 @@ function _rand(rng::AbstractRNG, h::NDHistogram, Z; tries = 1e18)
     error("Sampling failed!")
 end
 
-
 import Base.rand
 function Base.rand(rng::AbstractRNG, h::NDHistogram; tries = 1e18)
     Z = sum(values(h))
@@ -250,131 +276,3 @@ end
 Base.rand(h::NDHistogram, n::Int; kwargs...) = rand(default_rng(), h, n; kwargs...)
 
 ## ------------------------------------------------------------
-# struct NDHistogram{T}
-#     bin_rule::Function
-#     count_dict::Dict{T, Int}
-#     extras::Dict{Symbol, Any}
-#     function NDHistogram{T}(bin_rule::Function) where T
-#         new{T}(bin_rule, Dict{T, Int}(), Dict{Symbol, Any}())
-#     end
-# end
-
-# ## ------------------------------------------------------------
-# # DONE: Use an interface similar to rand... rand(Space)...
-# # rand(Bool) from booleas, rand([1, 2...]) from the given values, etc...
-# # NDHistogram is just a collection of 'spaces' from which we can 'map' a value...
-# # A custom space is just a function input -> bin (kind of the current status)...
-# # but, for support multiple dimentions we should 
-
-# ## ------------------------------------------------------------
-# # Base
-# import Base.getproperty
-# function getproperty(h::NDHistogram, k::Symbol)
-#     hasfield(typeof(h), k) && return getfield(h, k)
-#     haskey(h.extras, k) && return getindex(h.extras, k)
-#     getfield(h, k)
-# end
-
-# import Base.propertynames
-# function propertynames(h::NDHistogram, ::Bool)
-#     _ps = fieldnames(NDHistogram) |> collect
-#     push!(_ps, keys(h.extras)...)
-#     return _ps
-# end
-
-# import Base.hasproperty
-# function hasproperty(h::NDHistogram, k::Symbol)
-#     hasfield(typeof(h), k) || haskey(h.extras, k)
-# end
-
-# import Base.haskey
-# haskey(h::NDHistogram, k::Symbol) = haskey(h.extras, k)
-
-# import Base.getindex
-# getindex(h::NDHistogram, k::Symbol) = getindex(h.extras, k)
-
-# import Base.setindex!
-# setindex!(h::NDHistogram, x, k::Symbol) = setindex!(h.extras, x, k)
-
-# import Base.keys
-# keys(h::NDHistogram) = keys(h.count_dict)
-# import Base.values
-# values(h::NDHistogram) = values(h.count_dict)
-
-# # ------------------------------------------------------------
-# function find_bin(h::NDHistogram{T}, v) where T
-#     x::T = h.bin_rule(h, v) # apply bin_rule
-#     isa(x, T) || error("Invalid bin_rule return type, expected: ", T, ", got: ", typeof(x))
-#     return x
-# end
-
-# bins(h::NDHistogram) = keys(h)
-# counts(h::NDHistogram) = values(h)
-# counts(h::NDHistogram{T}, k::T) where T = h.count_dict[k]
-# counts(h::NDHistogram{T}, ks::AbstractArray{T}) where T = [counts(h, k) for k in ks]
-# counts(h::NDHistogram{T}, ks::Base.KeySet{T}) where T = [counts(h, k) for k in ks]
-
-# import Base.count!
-# function count!(h::NDHistogram{T}, v) where T
-#     x::T = find_bin(h, v)
-#     count_dict::Dict{T, Int} = h.count_dict
-#     get!(count_dict, x, 0)
-#     count_dict[x] += 1
-#     return h
-# end
-
-# # Merge histograms
-# function count!(h0::NDHistogram{T}, h1::NDHistogram{T}, hs::NDHistogram{T}...) where T
-#     count_dict0::Dict{T, Int} = h0.count_dict
-#     for (x, c) in h1.count_dict
-#         get!(count_dict0, x, 0)
-#         count_dict0[x] += c
-#     end
-#     for hi in hs
-#         for (x, c) in hi.count_dict
-#             get!(count_dict0, x, 0)
-#             count_dict0[x] += c
-#         end
-#     end
-#     return h0
-# end
-
-
-# ## ------------------------------------------------------------
-# # Constructors
-
-# # range_histogram
-# function range_histogram(r::rT) where {rT <: AbstractRange}
-#     vT = eltype(r)
-#     # create histogram
-#     h = NDHistogram{vT}() do _h, v
-#         _bins::rT = _h.range
-#         ci = _find_nearest(v, r)
-#         return _bins[ci]
-#     end
-#     # add extras
-#     h[:range] = r
-
-#     return h
-# end
-
-# function range_histogram(x0, x1; kwargs...)
-#     r = range(x0, x1; kwargs...)
-#     return range_histogram(r)
-# end
-
-# function range_histogram(r1::AbstractRange, rs::AbstractRange...)
-#     # create histogram
-#     rs = tuple(r1, rs...)
-#     vT = tuple(first.(rs)...) |> typeof
-#     h = NDHistogram{vT}() do _h, v
-#         I = Tuple(_find_nearest.(v, rs))
-#         return getindex.(rs, I)
-#     end
-#     # add extras
-#     return h
-# end
-
-# # identity_histogram
-# __identity(::NDHistogram{T}, v::T) where T = v
-# identity_histogram(vT::DataType) =  NDHistogram{vT}(__identity)
