@@ -5,7 +5,7 @@
 
 =======
 
-TODO: Make proper documentation
+> TODO: Make proper documentation
 
 ## Examples
 
@@ -47,7 +47,8 @@ let
     # build a new NDHistogram which is the marginal of the given dimentions
     # The dimentions can be a range (ex 1:2)
     h1 = marginal(h0, dim)
-    # rebin change the support of a dimention and recompute the histogram
+    # rebin change the support of a dimention and recompute the histogram.
+    # if the new support is less dense information will be lost. 
     h2 = rebin(h1, dim => -10.0:1.0:10.0)
     
     # plots

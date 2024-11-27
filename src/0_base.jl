@@ -182,7 +182,7 @@ function Base.merge!(h0::NDHistogram, h1::NDHistogram, hs::NDHistogram...)
 end
 
 ## ------------------------------------------------------------
-# TODO: find a better name
+# TODO: find a better name (resupport?)
 export rebin
 function rebin(h0::NDHistogram, ss1::Pair...)
     ss1 = Dict(ss1...)
