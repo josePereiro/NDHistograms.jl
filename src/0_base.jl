@@ -5,7 +5,7 @@ export NDHistogram
 struct NDHistogram{elT}
     supports::Vector                # dimention support
     dim_names::Dict                 # dimention names <=> support index
-    count_dict::Dict{elT, Int}      # space point => count
+    count_dict::Dict{elT, Float64}      # space point => count
     function NDHistogram(ss::Pair...)
         isempty(ss) && error("Empty space definition.")
         supports = [last(si) for si in ss]
@@ -38,7 +38,18 @@ Base.keys(h::NDHistogram) = keys(h.count_dict)
 Base.keys(h::NDHistogram, dims) =
     (v[dimindex(h, dims)] for v in keys(h.count_dict))
 import Base.values
-Base.values(h::NDHistogram) = (w::Int for w in values(h.count_dict))
+Base.values(h::NDHistogram) = values(h.count_dict)
+
+export hist_series
+function hist_series(h::NDHistogram, dim)
+    dim = dimindex(h, dim)
+    vs = keys(h.count_dict)
+    xT = eltype(h, dim)
+    xs = xT[v[dim] for v in vs]
+    ws = [h.count_dict[v] for v in vs]
+    return xs, ws
+end
+
 
 import Base.similar
 function Base.similar(h0::NDHistogram, dims = Colon())
@@ -125,8 +136,14 @@ descretize(F::Function, v) = F(v) # custom mapping
 descretize(::T, n::T) where T = n # identity
 
 # ------------------------------------------------------------
+import Base.eltype
+Base.eltype(h::NDHistogram{elT}) where elT = elT
+Base.eltype(h::NDHistogram{elT}, dim) where elT = 
+    elT.parameters[dimindex(h, dim)]
+
+# ------------------------------------------------------------
 import Base.count!
-function count!(h::NDHistogram, v::Tuple, w = 1)
+function count!(h::NDHistogram, v::Tuple, w = 1.0)
     v = tuple([
         descretize(S, vi) for (S, vi) 
         in zip(h.supports, v)
