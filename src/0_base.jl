@@ -214,12 +214,11 @@ end
 # TODO: find a better name (resupport?)
 export rebin
 function rebin(h0::NDHistogram, ss1::Pair...)
-    ss1 = Dict(ss1...)
-    for (n0, s0) in zip(dimname(h0), support(h0))
-        haskey(ss1, n0) && continue
-        ss1[n0] = s0
+    h1 = similar(h0)
+    for (n0, s0) in ss1
+        i0 = h1.dim_names[n0]  # dimention names <=> support index
+        h1.supports[i0] = s0      # dimention support
     end
-    h1 = NDHistogram(pairs(ss1)...)
     # recount!
     for (v, w) in zip(keys(h0), values(h0))
         count!(h1, v, w)
@@ -243,7 +242,7 @@ import Base.filter
 function Base.filter(f::Function, h0::NDHistogram)
     h1 = similar(h0)
     for (v, w) in h0.count_dict
-        f(v) || continue
+        f(v, w) || continue
         count!(h1, v, w)
     end
     return h1
