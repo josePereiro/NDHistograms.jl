@@ -210,6 +210,14 @@ function Base.merge!(h0::NDHistogram, h1::NDHistogram, hs::NDHistogram...)
     return h0
 end
 
+function Base.merge!(hs::Vector{NDHistogram})
+    h0 = similar(first(hs))
+    for (i, h) in enumerate(hs)
+        merge!(h0, h)
+    end
+    return h0
+end
+
 ## ------------------------------------------------------------
 # TODO: find a better name (resupport?)
 export rebin
