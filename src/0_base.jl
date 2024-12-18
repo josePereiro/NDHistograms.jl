@@ -210,7 +210,7 @@ function Base.merge!(h0::NDHistogram, h1::NDHistogram, hs::NDHistogram...)
     return h0
 end
 
-function Base.merge(hs::Vector{NDHistogram})
+function Base.merge(hs::Vector{<:NDHistogram})
     h0 = similar(first(hs))
     for h in hs
         merge!(h0, h)
